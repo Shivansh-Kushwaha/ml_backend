@@ -1,0 +1,5 @@
+__pycache__/
+venv/
+data/
+*.log
+# Do NOT ignore models/ — we need them in Docker image
