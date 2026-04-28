@@ -101,8 +101,7 @@ def check_disease_classes(dataset_dir="data/plant_village"):
 
 DISEASE_CLASSES = check_disease_classes()
 
-def get_disease_model(num_classes=38):
-    """
+def get_disease_model(num_classes=len(DISEASE_CLASSES)):    """
     Creates a Transfer Learning model based on MobileNetV3Small.
     Why MobileNetV3Small? 
     1. It's optimized for mobile/low-resource environments (high speed).
@@ -144,5 +143,5 @@ def load_crop_model(model_path):
 def load_disease_model(model_path):
     """Loads the TensorFlow Keras model."""
     if os.path.exists(model_path):
-        return tf.keras.models.load_model(model_path)
+        return tf.keras.models.load_model(model_path, compile=False)
     return None
