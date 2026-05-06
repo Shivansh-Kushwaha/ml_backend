@@ -46,13 +46,20 @@ def read_health():
 async def diagnose_crop(image: UploadFile = File(...)):
     """
     Accepts an image file, returns plant disease classification result.
-    The Main Backend will use this result to generate natural language advice.
     """
     if not disease_model:
         raise HTTPException(status_code=503, detail="Disease detection model not loaded on server.")
     
+    # Basic File Validation
+    if not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
+
     try:
         contents = await image.read()
+        # Limit size to 5MB
+        if len(contents) > 5 * 1024 * 1024:
+             raise HTTPException(status_code=400, detail="File too large. Maximum size is 5MB.")
+             
         img = Image.open(io.BytesIO(contents))
         processed_img = preprocess_image(img)
         
@@ -61,6 +68,9 @@ async def diagnose_crop(image: UploadFile = File(...)):
         confidence = float(np.max(prediction))
         
         disease_name = DISEASE_CLASSES[result_idx]
+        print("diseaseName",disease_name)
+        print("confidence", confidence)
+        print("timestamp", float(tf.timestamp().numpy()))
         
         return {
             "success": True,
@@ -70,14 +80,16 @@ async def diagnose_crop(image: UploadFile = File(...)):
                 "timestamp": float(tf.timestamp().numpy())
             }
         }
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+        print(f"Inference error: {str(e)}") # Log the error
+        raise HTTPException(status_code=500, detail="Internal inference error.")
 
 @app.post("/api/ml/recommend-crop")
 def recommend_crop(data: CropRecommendRequest):
     """
     Accepts soil and weather parameters, returns recommended crop.
-    The Main Backend will use this result to generate natural language advice.
     """
     if not crop_model:
         raise HTTPException(status_code=503, detail="Crop recommendation model not loaded on server.")
@@ -99,7 +111,24 @@ def recommend_crop(data: CropRecommendRequest):
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Recommendation error: {str(e)}")
+        print(f"Recommendation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal recommendation error.")
+
+@app.post("/api/ml/advisor")
+async def ask_advisor(data: dict):
+    """
+    Placeholder for the AI advisor endpoint. 
+    Main backend expects this to provide structured insights.
+    """
+    return {
+        "success": True,
+        "data": {
+            "answer": "The AI Advisor is currently being integrated with the RAG pipeline.",
+            "query": data.get("query", ""),
+            "status": "ready",
+            "timestamp": str(tf.timestamp().numpy())
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn

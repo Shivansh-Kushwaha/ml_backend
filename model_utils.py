@@ -1,87 +1,36 @@
 import os
 import numpy as np
 import tensorflow as tf
-import keras
-from keras import layers, models
-from keras.applications import MobileNetV3Small
+from tensorflow.keras import layers, models
+from tensorflow.keras.applications import EfficientNetB0
 import joblib
 from PIL import Image
 
 # --- CONFIGURATION ---
 DISEASE_CLASSES = [
-    'Apple___Healthy', 'Apple___Rotten', 'Apple___Black_rot', 'Apple___Rust', 'Apple___Scab',
-
-    'Banana___Healthy', 'Banana___Rotten',
-
-    'Bellpepper___Healthy', 'Bellpepper___Rotten',
-
-    'Carrot___Healthy', 'Carrot___Rotten',
-
-    'Cassava___Bacterial_blight', 'Cassava___Brown_streak_disease',
-    'Cassava___Green_mottle', 'Cassava___Healthy', 'Cassava___Mosaic_disease',
-
-    'Cherry___Healthy', 'Cherry___Powdery_mildew',
-
-    'Chili___Healthy', 'Chili___Leaf_curl', 'Chili___Leaf_spot',
-    'Chili___Whitefly', 'Chili___Yellowish',
-
-    'Coffee___Cercospora_leaf_spot', 'Coffee___Healthy',
-    'Coffee___Red_spider_mite', 'Coffee___Rust',
-
-    'Corn___Common_rust', 'Corn___Gray_leaf_spot',
-    'Corn___Healthy', 'Corn___Northern_leaf_blight',
-
-    'Cucumber___Healthy', 'Cucumber___Diseased', 'Cucumber___Rotten',
-
-    'Guava___Healthy', 'Guava___Diseased', 'Guava___Rotten',
-
-    'Grape___Healthy', 'Grape___Rotten', 'Grape___Black_measles',
-    'Grape___Black_rot', 'Grape___Leaf_blight',
-
-    'Jamun___Healthy', 'Jamun___Diseased',
-
-    'Jujube___Healthy', 'Jujube___Rotten',
-
-    'Lemon___Healthy', 'Lemon___Diseased',
-
-    'Mango___Healthy', 'Mango___Diseased', 'Mango___Rotten',
-
-    'Orange___Healthy', 'Orange___Rotten',
-
-    'Peach___Healthy', 'Peach___Bacterial_spot',
-
-    'Pepper_bell___Healthy', 'Pepper_bell___Bacterial_spot',
-
-    'Pomegranate___Healthy', 'Pomegranate___Diseased', 'Pomegranate___Rotten',
-
-    'Potato___Healthy', 'Potato___Rotten',
-    'Potato___Early_blight', 'Potato___Late_blight',
-
-    'Rice___Healthy', 'Rice___Brown_spot', 'Rice___Leaf_blast',
-    'Rice___Neck_blast', 'Rice___Hispa',
-
-    'Soybean___Healthy', 'Soybean___Bacterial_blight', 'Soybean___Caterpillar',
-    'Soybean___Diabrotica_speciosa', 'Soybean___Downy_mildew',
-    'Soybean___Mosaic_virus', 'Soybean___Powdery_mildew',
-    'Soybean___Rust', 'Soybean___Southern_blight',
-
-    'Strawberry___Healthy', 'Strawberry___Rotten', 'Strawberry___Leaf_scorch',
-
-    'Sugarcane___Healthy', 'Sugarcane___Bacterial_blight',
-    'Sugarcane___Red_rot', 'Sugarcane___Red_stripe', 'Sugarcane___Rust',
-
-    'Tea___Healthy', 'Tea___Algal_leaf', 'Tea___Anthracnose',
-    'Tea___Bird_eye_spot', 'Tea___Brown_blight', 'Tea___Red_leaf_spot',
-
-    'Tomato___Healthy', 'Tomato___Rotten',
-    'Tomato___Bacterial_spot', 'Tomato___Early_blight',
-    'Tomato___Late_blight', 'Tomato___Leaf_mold',
-    'Tomato___Septoria_leaf_spot', 'Tomato___Spider_mites',
-    'Tomato___Target_spot', 'Tomato___Yellow_leaf_curl_virus',
-    'Tomato___Mosaic_virus',
-
-    'Wheat___Healthy', 'Wheat___Brown_rust',
-    'Wheat___Yellow_rust', 'Wheat___Septoria'
+    'Apple___Apple_scab',
+    'Apple___Black_rot',
+    'Apple___Cedar_apple_rust',
+    'Apple___healthy',
+    'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot',
+    'Corn_(maize)___Common_rust_',
+    'Corn_(maize)___Northern_Leaf_Blight',
+    'Corn_(maize)___healthy',
+    'Pepper__bell___Bacterial_spot',
+    'Pepper__bell___healthy',
+    'Potato___Early_blight',
+    'Potato___Late_blight',
+    'Potato___healthy',
+    'Tomato_Bacterial_spot',
+    'Tomato_Early_blight',
+    'Tomato_Late_blight',
+    'Tomato_Leaf_Mold',
+    'Tomato_Septoria_leaf_spot',
+    'Tomato_Spider_mites_Two_spotted_spider_mite',
+    'Tomato__Target_Spot',
+    'Tomato__Tomato_YellowLeaf__Curl_Virus',
+    'Tomato__Tomato_mosaic_virus',
+    'Tomato_healthy'
 ]
 
 CROPS = [
@@ -99,39 +48,43 @@ def check_disease_classes(dataset_dir="data/plant_village"):
             return detected_classes
     return DISEASE_CLASSES
 
-DISEASE_CLASSES = check_disease_classes()
+# DISEASE_CLASSES = check_disease_classes()
+def get_disease_model():
+    base_model = EfficientNetB0(
+        input_shape=(224, 224, 3),
+        include_top=False,
+        weights='imagenet'
+    )
 
-def get_disease_model(num_classes=len(DISEASE_CLASSES)):    """
-    Creates a Transfer Learning model based on MobileNetV3Small.
-    Why MobileNetV3Small? 
-    1. It's optimized for mobile/low-resource environments (high speed).
-    2. It uses Neural Architecture Search (NAS) for better accuracy-to-latency ratio.
-    3. It's pre-trained on ImageNet, providing a strong feature extraction base.
-    """
-    base_model = MobileNetV3Small(input_shape=(224, 224, 3), include_top=False, weights='imagenet')
-    base_model.trainable = False  # Freeze base layers initially
+    base_model.trainable = False
 
-    model = models.Sequential([
-        base_model,
-        layers.GlobalAveragePooling2D(), # Reduces spatial dimensions
-        layers.Dense(256, activation='relu'), # High-level feature representation
-        layers.Dropout(0.3), # Prevents overfitting
-        layers.Dense(num_classes, activation='softmax') # Classification head
-    ])
-    
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    x = base_model.output
+    x = layers.GlobalAveragePooling2D()(x)
+    x = layers.Dense(256, activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Dropout(0.4)(x)
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+
+    model = models.Model(inputs=base_model.input, outputs=outputs)
+
+    model.compile(
+        optimizer='adam',
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
     return model
 
 def preprocess_image(image, target_size=(224, 224)):
     """
-    Standard preprocessing for MobileNetV3.
+    Standard preprocessing for EfficientNetB0.
     """
     if image.mode != "RGB":
         image = image.convert("RGB")
     image = image.resize(target_size)
     img_array = np.array(image)
     img_array = np.expand_dims(img_array, axis=0)
-    img_array = tf.keras.applications.mobilenet_v3.preprocess_input(img_array)
+    img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
     return img_array
 
 def load_crop_model(model_path):
@@ -143,5 +96,11 @@ def load_crop_model(model_path):
 def load_disease_model(model_path):
     """Loads the TensorFlow Keras model."""
     if os.path.exists(model_path):
-        return tf.keras.models.load_model(model_path, compile=False)
+        try:
+            return tf.keras.models.load_model(model_path, compile=False)
+        except Exception as e:
+            print(f"CRITICAL ERROR: Model loading failed ({e}).")
+            return None
+            
+    print("CRITICAL ERROR: Model file not found.")
     return None
